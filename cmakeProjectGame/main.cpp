@@ -206,6 +206,8 @@ int blockShapes[7][4][4][4] = {
         }
 };
 
+class Block;
+
 class Map {
 private:
     int width;
@@ -228,6 +230,18 @@ public:
         grid.resize(DEFAULT_ROWS_COUNT, vector<int>(DEFAULT_COLUMNS_COUNT, -1));
     }
 
+    Color getColorForType(int blockType) {
+        switch (blockType) {
+            case 0: return Color::Yellow; // Type O
+            case 1: return Color::Cyan;   // Type I
+            case 2: return Color::Green;  // Type S
+            case 3: return Color::Red;    // Type Z
+            case 4: return Color::Blue;   // Type L
+            case 5: return Color::Magenta;// Type J
+            case 6: return Color(128, 0, 128); // Type T
+        }
+    }
+
     void draw(RenderWindow& window) {
         window.draw(field);
 
@@ -237,7 +251,7 @@ public:
                 RectangleShape cell(Vector2f(DEFAULT_CELL_SIZE, DEFAULT_CELL_SIZE));
                 cell.setPosition(field.getPosition().x + col * DEFAULT_CELL_SIZE,
                                  field.getPosition().y + row * DEFAULT_CELL_SIZE);
-                cell.setFillColor(grid[row][col] == -1 ? Color::Transparent : Color::White);
+                cell.setFillColor(grid[row][col] == -1 ? Color::Transparent : getColorForType(grid[row][col]));
                 cell.setOutlineColor(Color(55, 55, 55));
                 cell.setOutlineThickness(1);
                 window.draw(cell);
@@ -261,18 +275,33 @@ public:
         return true;
     }
 
-    void dropBlock(int x, int y, int shape[4][4]) {
-        for (int i = 0; i < 4; i++) {
-            for (int j = 0; j < 4; j++) {
-                if (shape[i][j] != 0) {
-                    grid[y + i][x + j] = shape[i][j];
+    void dropBlock(int x, int y, Block& block);
+
+    void removeLine(){
+        for (int y = DEFAULT_ROWS_COUNT - 1; y >= 0; --y) {
+            bool rowFull = true;
+
+            for (int x = 0; x < DEFAULT_COLUMNS_COUNT; ++x) {
+                if (grid[y][x] == -1) {
+                    rowFull = false;
+                    break;
                 }
             }
-        }
-    }
 
-    bool checkLine();
-    void removeLine();
+            if (rowFull) {
+                for (int i = y; i > 0; --i) {
+                    for (int j = 0; j < DEFAULT_COLUMNS_COUNT; ++j) {
+                        grid[i][j] = grid[i - 1][j];
+                    }
+                }
+
+                // check the row again, after moving everything down
+                y++;
+                removedLines++;
+            }
+        }
+    };
+
     void changeSize();
 };
 
@@ -282,11 +311,10 @@ public:
 
 private:
     Type type;
-    Color color;
-    Time delay;
     int shape[4][4];
     int rotationState;
     friend class GameMenu;
+    friend class Map;
 
 public:
     Block(Type& type) : type(type), rotationState(0) {
@@ -307,7 +335,7 @@ public:
                     RectangleShape cell(Vector2f(map.DEFAULT_CELL_SIZE, map.DEFAULT_CELL_SIZE));
                     cell.setPosition(map.field.getPosition().x + (x + j) * map.DEFAULT_CELL_SIZE,
                                      map.field.getPosition().y + (y + i) * map.DEFAULT_CELL_SIZE);
-                    cell.setFillColor(Color::White);
+                    cell.setFillColor(map.getColorForType(static_cast<int>(type)));
                     window.draw(cell);
                 }
             }
@@ -315,6 +343,16 @@ public:
     }
 
 };
+
+void Map::dropBlock(int x, int y, Block& block) {
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            if (block.shape[i][j] != 0) {
+                grid[y + i][x + j] = static_cast<int>(block.type);
+            }
+        }
+    }
+}
 
 class Player {
 private:
@@ -450,7 +488,7 @@ public:
             } else {
                 while (!gameOver && window.isOpen()) {
                     Block currentBlock = generateRandomBlock(); // generate a new block
-                    Vector2i blockPosition(7, 0);
+                    Vector2i blockPosition(4, 0);
 
                     bool blockPlaced = false;
                     while (!blockPlaced && window.isOpen()) {
@@ -494,7 +532,7 @@ public:
                         if (gameMap.canPlaceBlock(blockPosition.x, blockPosition.y + 1, currentBlock.shape)) {
                             blockPosition.y++;
                         } else {
-                            gameMap.dropBlock(blockPosition.x, blockPosition.y, currentBlock.shape);
+                            gameMap.dropBlock(blockPosition.x, blockPosition.y, currentBlock);
                             blockPlaced = true;
                         }
 
@@ -511,8 +549,7 @@ public:
                         }
                     }
 
-                    // After placing a block, check for full lines and remove them
-                    // gameMap.removeFullLines(); // This method should be implemented
+                    gameMap.removeLine();
                 }
             }
 
