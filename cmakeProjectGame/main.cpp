@@ -234,13 +234,13 @@ public:
 
     Color getColorForType(int blockType) {
         switch (blockType) {
-            case 0: return Color::Yellow; // Type O
-            case 1: return Color::Cyan;   // Type I
-            case 2: return Color::Green;  // Type S
-            case 3: return Color::Red;    // Type Z
-            case 4: return Color::Blue;   // Type L
-            case 5: return Color::Magenta;// Type J
-            case 6: return Color(128, 0, 128); // Type T
+            case 0: return Color(102, 0, 51); // Type O
+            case 1: return Color(153, 0, 76);   // Type I
+            case 2: return Color(204, 0, 102);  // Type S
+            case 3: return Color(255, 0, 127);    // Type Z
+            case 4: return Color(255, 51, 153);   // Type L
+            case 5: return Color(255, 153, 204);// Type J
+            case 6: return Color(255, 204, 229); // Type T
         }
     }
 
@@ -344,6 +344,40 @@ public:
         }
     }
 
+    void move(Map& map, Vector2i& blockPosition){
+        // move block left
+        if (Keyboard::isKeyPressed(Keyboard::Left)) {
+            if (map.canPlaceBlock(blockPosition.x - 1, blockPosition.y, this->shape)) {
+                blockPosition.x -= 1;
+            }
+        }
+
+        // move block right
+        if (Keyboard::isKeyPressed(Keyboard::Right)) {
+            if (map.canPlaceBlock(blockPosition.x + 1, blockPosition.y, this->shape)) {
+                blockPosition.x += 1;
+            }
+        }
+
+        // speed up the block
+        if (Keyboard::isKeyPressed(Keyboard::Down)) {
+            if (map.canPlaceBlock(blockPosition.x + 1, blockPosition.y, this->shape)) {
+                blockPosition.y += 1;
+            }
+        }
+
+        if (Keyboard::isKeyPressed(Keyboard::Up)) {
+            int previousRotationState = this->rotationState;
+            this->rotate();
+
+            // check if the new rotation is possible, if not revert
+            if (!map.canPlaceBlock(blockPosition.x, blockPosition.y, this->shape)) {
+                this->rotationState = previousRotationState;
+                memcpy(this->shape, blockShapes[static_cast<int>(this->type)][this->rotationState], sizeof(this->shape));
+            }
+        }
+    }
+
 };
 
 void Map::dropBlock(int x, int y, Block& block) {
@@ -368,18 +402,6 @@ public:
     void displayBestScore();
     void updateTime(int time);
     void updateBestTime(int time);
-};
-
-class ScoreSystem {
-private:
-    int lastScore;
-    int bestScore;
-
-public:
-    int calculateScore(int lines);
-    int bonusScore(int consecutiveLines);
-    void updateScore(int score);
-    void updateBestScore(int score);
 };
 
 class GameDataStorage {
@@ -430,6 +452,8 @@ private:
                             Block::Type::L, Block::Type::J, Block::Type::T};
     Font font;
     Text scoreText;
+    Texture backgroundImage, playImage, exitImage, backgroundImageForGame;
+    Sprite backgroundSprite, backgroundImageForGameSprite;
 
 public:
     GameMenu(): gameOver(false){
@@ -451,35 +475,71 @@ public:
         scoreText.setString("Score: " + to_string(score));
     }
 
-    void startGame(){
-        RenderWindow window(VideoMode(1000, 805), "Tetris game from Yarrochka");
-        Texture backgroundImage;
-        backgroundImage.loadFromFile("../Images/background1.png");
+    void tetrisRun(Event& event, RenderWindow& window){
+        Map gameMap(420, 805);
 
-        Sprite backgroundSprite;
+        while (!gameOver && window.isOpen()) {
+            Block currentBlock = generateRandomBlock();
+            Vector2i blockPosition(4, 0);
+
+            bool blockPlaced = false;
+            while (!blockPlaced && window.isOpen()) {
+                while (window.pollEvent(event)) {
+                    if (event.type == Event::Closed)
+                        window.close();
+                }
+
+                currentBlock.move(gameMap, blockPosition);
+
+                if (gameMap.canPlaceBlock(blockPosition.x, blockPosition.y + 1, currentBlock.shape)) {
+                    blockPosition.y++;
+                } else {
+                    gameMap.dropBlock(blockPosition.x, blockPosition.y, currentBlock);
+                    blockPlaced = true;
+                }
+
+                // draw the block at its current position
+                window.draw(backgroundImageForGameSprite);
+                gameMap.draw(window);
+                currentBlock.draw(window, gameMap, blockPosition.x, blockPosition.y);
+                window.draw(scoreText);
+                window.display();
+
+                this_thread::sleep_for(chrono::milliseconds(450));
+
+                if (!gameMap.canPlaceBlock(7, 0, currentBlock.shape)) {
+                    gameOver = true;
+                }
+            }
+
+            gameMap.removeLine();
+            updateScoreDisplay(gameMap.removedLines * 100);
+        }
+    }
+
+    void downloadTextures(RenderWindow& window){
+        backgroundImage.loadFromFile("../Images/background1.png");
         backgroundSprite.setTexture(backgroundImage);
         backgroundSprite.setScale(
                 float(window.getSize().x) / backgroundImage.getSize().x,
                 float(window.getSize().y) / backgroundImage.getSize().y
         );
 
-        Texture playImage, exitImage;
         playImage.loadFromFile("../Images/Buttons/play.png");
         exitImage.loadFromFile("../Images/Buttons/exit.png");
 
-        Button playButton(playImage, 100, 100);
-        Button exitButton(exitImage, 122, 250);
-        bool isMenu = true;
-        Texture backgroundImageForGame;
         backgroundImageForGame.loadFromFile("../Images/background2.png");
-        Sprite backgroundImageForGameSprite;
         backgroundImageForGameSprite.setTexture(backgroundImageForGame);
         backgroundImageForGameSprite.setScale(
                 float(window.getSize().x) / backgroundImageForGame.getSize().x,
                 float(window.getSize().y) / backgroundImageForGame.getSize().y
         );
-        Map gameMap(420, 805);
+    }
 
+    void startGame(){
+        RenderWindow window(VideoMode(1000, 805), "Tetris game from Yarrochka");
+        bool isMenu = true;
+        downloadTextures(window);
         while (window.isOpen()) {
             Event event;
             while (window.pollEvent(event)) {
@@ -487,10 +547,11 @@ public:
                     window.close();
                 }
             }
-
             window.clear();
 
             if (isMenu) {
+                Button playButton(playImage, 100, 100);
+                Button exitButton(exitImage, 122, 250);
                 window.draw(backgroundSprite);
                 playButton.draw(window);
                 exitButton.draw(window);
@@ -502,81 +563,12 @@ public:
                     window.close();
                 }
             } else {
-                while (!gameOver && window.isOpen()) {
-                    Block currentBlock = generateRandomBlock(); // generate a new block
-                    Vector2i blockPosition(4, 0);
-
-                    bool blockPlaced = false;
-                    while (!blockPlaced && window.isOpen()) {
-                        while (window.pollEvent(event)) {
-                            if (event.type == Event::Closed)
-                                window.close();
-                        }
-
-                        // move block left
-                        if (Keyboard::isKeyPressed(Keyboard::Left)) {
-                            if (gameMap.canPlaceBlock(blockPosition.x - 1, blockPosition.y, currentBlock.shape)) {
-                                blockPosition.x -= 1;
-                            }
-                        }
-
-                        // move block right
-                        if (Keyboard::isKeyPressed(Keyboard::Right)) {
-                            if (gameMap.canPlaceBlock(blockPosition.x + 1, blockPosition.y, currentBlock.shape)) {
-                                blockPosition.x += 1;
-                            }
-                        }
-
-                        // speed up the block
-                        if (Keyboard::isKeyPressed(Keyboard::Down)) {
-                            if (gameMap.canPlaceBlock(blockPosition.x + 1, blockPosition.y, currentBlock.shape)) {
-                                blockPosition.y += 1;
-                            }
-                        }
-
-                        if (Keyboard::isKeyPressed(Keyboard::Up)) {
-                            int previousRotationState = currentBlock.rotationState;
-                            currentBlock.rotate();
-
-                            // check if the new rotation is possible, if not revert
-                            if (!gameMap.canPlaceBlock(blockPosition.x, blockPosition.y, currentBlock.shape)) {
-                                currentBlock.rotationState = previousRotationState;
-                                memcpy(currentBlock.shape, blockShapes[static_cast<int>(currentBlock.type)][currentBlock.rotationState], sizeof(currentBlock.shape));
-                            }
-                        }
-
-                        if (gameMap.canPlaceBlock(blockPosition.x, blockPosition.y + 1, currentBlock.shape)) {
-                            blockPosition.y++;
-                        } else {
-                            gameMap.dropBlock(blockPosition.x, blockPosition.y, currentBlock);
-                            blockPlaced = true;
-                        }
-
-                        // draw the block at its current position
-                        window.draw(backgroundImageForGameSprite);
-                        gameMap.draw(window);
-                        currentBlock.draw(window, gameMap, blockPosition.x, blockPosition.y);
-                        window.draw(scoreText);
-                        window.display();
-
-                        this_thread::sleep_for(chrono::milliseconds(450));
-
-                        if (!gameMap.canPlaceBlock(7, 0, currentBlock.shape)) {
-                            gameOver = true;
-                        }
-                    }
-
-                    gameMap.removeLine();
-                    updateScoreDisplay(gameMap.removedLines * 100);
-                }
+                tetrisRun(event, window);
             }
 
             window.display();
         }
     };
-
-    void endGame();
-    void checkGameOver();
 };
 
 int main() {
