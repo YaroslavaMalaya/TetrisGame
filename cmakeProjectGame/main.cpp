@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Window/Keyboard.hpp>
+#include <SFML/Graphics/Text.hpp>
 #include <iostream>
 #include <vector>
 #include <thread>
@@ -212,7 +213,6 @@ class Map {
 private:
     int width;
     int height;
-    int removedLines;
     RectangleShape field;
     vector<vector<int>> grid;
     const int DEFAULT_ROWS_COUNT = 23;
@@ -221,6 +221,8 @@ private:
     friend class Block;
 
 public:
+    int removedLines;
+
     Map(int w, int h) : width(w), height(h), removedLines(0) {
         field.setSize(Vector2f(width, height));
         field.setFillColor(Color::Black);
@@ -426,13 +428,27 @@ private:
     bool gameOver;
     Block::Type types[7] = {Block::Type::O, Block::Type::I, Block::Type::S, Block::Type::Z,
                             Block::Type::L, Block::Type::J, Block::Type::T};
+    Font font;
+    Text scoreText;
 
 public:
-    GameMenu(): gameOver(false){};
+    GameMenu(): gameOver(false){
+        font.loadFromFile("/Users/Yarrochka/Downloads/VCR_OSD_MONO.ttf");
+        scoreText.setFont(font);
+        scoreText.setCharacterSize(25);
+        scoreText.setFillColor(Color::Black);
+        scoreText.setStyle(Text::Bold);
+        scoreText.setPosition(60, 60);
+        scoreText.setString("Score: ");
+    };
 
     Block generateRandomBlock() {
         int randIndex = rand() % 7;
         return Block(types[randIndex]);
+    }
+
+    void updateScoreDisplay(int score) {
+        scoreText.setString("Score: " + to_string(score));
     }
 
     void startGame(){
@@ -540,6 +556,7 @@ public:
                         window.draw(backgroundImageForGameSprite);
                         gameMap.draw(window);
                         currentBlock.draw(window, gameMap, blockPosition.x, blockPosition.y);
+                        window.draw(scoreText);
                         window.display();
 
                         this_thread::sleep_for(chrono::milliseconds(450));
@@ -550,6 +567,7 @@ public:
                     }
 
                     gameMap.removeLine();
+                    updateScoreDisplay(gameMap.removedLines * 100);
                 }
             }
 
@@ -559,7 +577,6 @@ public:
 
     void endGame();
     void checkGameOver();
-    void displayPlayerData();
 };
 
 int main() {
