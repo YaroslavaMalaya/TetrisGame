@@ -235,10 +235,10 @@ public:
     Color getColorForType(int blockType) {
         switch (blockType) {
             case 0: return Color(102, 0, 51); // Type O
-            case 1: return Color(153, 0, 76);   // Type I
-            case 2: return Color(204, 0, 102);  // Type S
-            case 3: return Color(255, 0, 127);    // Type Z
-            case 4: return Color(255, 51, 153);   // Type L
+            case 1: return Color(153, 0, 76); // Type I
+            case 2: return Color(204, 0, 102); // Type S
+            case 3: return Color(255, 0, 127); // Type Z
+            case 4: return Color(255, 51, 153); // Type L
             case 5: return Color(255, 153, 204);// Type J
             case 6: return Color(255, 204, 229); // Type T
         }
@@ -395,13 +395,25 @@ private:
     string name;
     int currentScore;
     int bestScore;
-    string currentTime;
-    string bestTime;
 
 public:
-    void displayBestScore();
-    void updateTime(int time);
-    void updateBestTime(int time);
+    Player(string& name) : name(name), currentScore(0), bestScore(0){}
+
+    void saveData(){
+
+    }
+
+    void checkAndUpdateScore(int score) {
+        this->currentScore = score;
+        if (score > this->bestScore) {
+            this->bestScore = score;
+            // saveData();
+        }
+    }
+
+    int getBestScore() {
+        return this->bestScore;
+    }
 };
 
 class GameDataStorage {
@@ -427,6 +439,7 @@ public:
 class Button {
 private:
     Sprite sprite;
+
     bool isHovered(RenderWindow& window) {
         auto mousePos = Mouse::getPosition(window);
         return sprite.getGlobalBounds().contains(static_cast<Vector2f>(mousePos));
@@ -447,16 +460,18 @@ public:
 
 class GameMenu {
 private:
-    bool gameOver;
+    bool gameOver, keyHandled, isMenu;
     Block::Type types[7] = {Block::Type::O, Block::Type::I, Block::Type::S, Block::Type::Z,
                             Block::Type::L, Block::Type::J, Block::Type::T};
     Font font;
     Text scoreText;
     Texture backgroundImage, playImage, exitImage, backgroundImageForGame;
     Sprite backgroundSprite, backgroundImageForGameSprite;
+    Text nameText;
+    string playerInput;
 
 public:
-    GameMenu(): gameOver(false){
+    GameMenu(): gameOver(false), isMenu(true), keyHandled(false){
         font.loadFromFile("/Users/Yarrochka/Downloads/VCR_OSD_MONO.ttf");
         scoreText.setFont(font);
         scoreText.setCharacterSize(25);
@@ -464,6 +479,12 @@ public:
         scoreText.setStyle(Text::Bold);
         scoreText.setPosition(60, 60);
         scoreText.setString("Score: ");
+
+        nameText.setFont(font);
+        nameText.setCharacterSize(24);
+        nameText.setFillColor(Color::White);
+        nameText.setString("Name: ");
+        nameText.setPosition(120, 60);
     };
 
     Block generateRandomBlock() {
@@ -473,6 +494,10 @@ public:
 
     void updateScoreDisplay(int score) {
         scoreText.setString("Score: " + to_string(score));
+    }
+
+    void updateNameDisplay(string& name) {
+        nameText.setString("Name: " + name);
     }
 
     void tetrisRun(Event& event, RenderWindow& window){
@@ -536,9 +561,28 @@ public:
         );
     }
 
+    void userInput(Event& event){
+        if (event.type == Event::TextEntered && !keyHandled) {
+            if (!keyHandled && event.text.unicode < 128) {
+                keyHandled = true;
+                if (event.text.unicode == '\b') {
+                    if (!playerInput.empty()) {
+                        playerInput.pop_back();
+                    }
+                } else if (event.text.unicode == '\n') {
+                    isMenu = false;
+                } else {
+                    playerInput += static_cast<char>(event.text.unicode);
+                }
+                updateNameDisplay(playerInput);
+            }
+        } else if (event.type == Event::KeyReleased) {
+            keyHandled = false;
+        }
+    }
+
     void startGame(){
         RenderWindow window(VideoMode(1000, 805), "Tetris game from Yarrochka");
-        bool isMenu = true;
         downloadTextures(window);
         while (window.isOpen()) {
             Event event;
@@ -547,14 +591,18 @@ public:
                     window.close();
                 }
             }
+
             window.clear();
 
             if (isMenu) {
+                userInput(event);
+                Player player(playerInput);
                 Button playButton(playImage, 100, 100);
                 Button exitButton(exitImage, 122, 250);
                 window.draw(backgroundSprite);
                 playButton.draw(window);
                 exitButton.draw(window);
+                window.draw(nameText);
 
                 if (playButton.isClicked(window)) {
                     isMenu = false;
