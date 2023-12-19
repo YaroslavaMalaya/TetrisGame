@@ -499,28 +499,27 @@ public:
     }
 };
 
-class GameMenu {
+class Renderer {
 private:
-    bool gameOver, keyHandled, isMenu;
-    Block::Type types[7] = {Block::Type::O, Block::Type::I, Block::Type::S, Block::Type::Z,
-                            Block::Type::L, Block::Type::J, Block::Type::T};
     Font font;
     Text scoreText, nameText, bestScoreText;
-    Texture backgroundImage, playImage, exitImage, backgroundImageForGame;
+    Texture backgroundImage, backgroundImageForGame, playImage, exitImage;;
     Sprite backgroundSprite, backgroundImageForGameSprite;
-    string playerInput;
-    GameDataStorage dataStorage;
-    Player* currentPlayer;
+    Button* playButton;
+    Button* exitButton;
 
 public:
-    GameMenu(): gameOver(false), isMenu(true), keyHandled(false), currentPlayer(nullptr){
+    RenderWindow& window;
+
+    Renderer(RenderWindow& win) : window(win), playButton(nullptr), exitButton(nullptr) {
         font.loadFromFile("/Users/Yarrochka/Downloads/VCR_OSD_MONO.ttf");
+
         scoreText.setFont(font);
         scoreText.setCharacterSize(25);
         scoreText.setFillColor(Color::Black);
         scoreText.setStyle(Text::Bold);
         scoreText.setPosition(60, 60);
-        scoreText.setString("Score:\n\n 0");
+        scoreText.setString("Score:\n\n0");
 
         nameText.setFont(font);
         nameText.setCharacterSize(24);
@@ -533,24 +532,88 @@ public:
         bestScoreText.setFillColor(Color::Black);
         bestScoreText.setStyle(Text::Bold);
         bestScoreText.setPosition(760, 60);
-        bestScoreText.setString("Best Score:\n\n -");
-    };
+        bestScoreText.setString("Best Score:\n\n-");
 
-    Block generateRandomBlock() {
-        int randIndex = rand() % 7;
-        return Block(types[randIndex]);
+        downloadTextures();
+        playButton = new Button(playImage, 100, 100);
+        exitButton = new Button(exitImage, 122, 250);
+    }
+
+    void downloadTextures(){
+        backgroundImage.loadFromFile("../Images/background1.png");
+        backgroundSprite.setTexture(backgroundImage);
+        backgroundSprite.setScale(
+                float(window.getSize().x) / backgroundImage.getSize().x,
+                float(window.getSize().y) / backgroundImage.getSize().y
+        );
+
+        playImage.loadFromFile("../Images/Buttons/play.png");
+        exitImage.loadFromFile("../Images/Buttons/exit.png");
+
+        backgroundImageForGame.loadFromFile("../Images/background2.png");
+        backgroundImageForGameSprite.setTexture(backgroundImageForGame);
+        backgroundImageForGameSprite.setScale(
+                float(window.getSize().x) / backgroundImageForGame.getSize().x,
+                float(window.getSize().y) / backgroundImageForGame.getSize().y
+        );
+    }
+
+    void drawGameBackground() {
+        window.draw(backgroundImageForGameSprite);
+    }
+
+    void drawMenu() {
+        window.draw(backgroundSprite);
+        playButton->draw(window);
+        exitButton->draw(window);
+        window.draw(nameText);
+    }
+
+    void draw() {
+        window.draw(scoreText);
+        window.draw(bestScoreText);
     }
 
     void updateScoreDisplay(int score) {
-        scoreText.setString("Score:\n\n " + to_string(score));
+        scoreText.setString("Score:\n\n" + to_string(score));
     }
 
-    void updateNameDisplay(string& name) {
+    void updateNameDisplay(const string& name) {
         nameText.setString("Name: " + name);
     }
 
     void updateBestScoreDisplay(int bestScore) {
         bestScoreText.setString("Best Score:\n\n" + to_string(bestScore));
+    }
+
+    Button* getPLayButton(){
+        return this->playButton;
+    }
+
+    Button* getExitButton(){
+        return this->exitButton;
+    }
+};
+
+
+class GameMenu {
+private:
+    bool gameOver, keyHandled, isMenu;
+    Block::Type types[7] = {Block::Type::O, Block::Type::I, Block::Type::S, Block::Type::Z,
+                            Block::Type::L, Block::Type::J, Block::Type::T};
+    Renderer renderer;
+    string playerInput;
+    GameDataStorage dataStorage;
+    Player* currentPlayer;
+
+public:
+    GameMenu(RenderWindow& window) : gameOver(false), isMenu(true), keyHandled(false), renderer(window), currentPlayer(nullptr) {
+        dataStorage.loadPlayersData();
+    }
+
+    Block generateRandomBlock() {
+        int randIndex = rand() % 7;
+        return Block(types[randIndex]);
     }
 
     void tetrisRun(Event& event, RenderWindow& window) {
@@ -577,11 +640,10 @@ public:
                 }
 
                 // draw the block at its current position
-                window.draw(backgroundImageForGameSprite);
+                renderer.drawGameBackground();
                 gameMap.draw(window);
                 currentBlock.draw(window, gameMap, blockPosition.x, blockPosition.y);
-                window.draw(scoreText);
-                window.draw(bestScoreText);
+                renderer.draw();
                 window.display();
 
                 this_thread::sleep_for(chrono::milliseconds(450));
@@ -592,32 +654,13 @@ public:
             }
 
             gameMap.removeLine();
-            updateScoreDisplay(gameMap.removedLines * 100);
+            renderer.updateScoreDisplay(gameMap.removedLines * 100);
         }
         if (currentPlayer->getBestScore() < gameMap.removedLines * 100)
         {
             currentPlayer->setCurrentScore(gameMap.removedLines * 100);
             dataStorage.savePlayerData(currentPlayer);
         }
-    }
-
-    void downloadTextures(RenderWindow& window){
-        backgroundImage.loadFromFile("../Images/background1.png");
-        backgroundSprite.setTexture(backgroundImage);
-        backgroundSprite.setScale(
-                float(window.getSize().x) / backgroundImage.getSize().x,
-                float(window.getSize().y) / backgroundImage.getSize().y
-        );
-
-        playImage.loadFromFile("../Images/Buttons/play.png");
-        exitImage.loadFromFile("../Images/Buttons/exit.png");
-
-        backgroundImageForGame.loadFromFile("../Images/background2.png");
-        backgroundImageForGameSprite.setTexture(backgroundImageForGame);
-        backgroundImageForGameSprite.setScale(
-                float(window.getSize().x) / backgroundImageForGame.getSize().x,
-                float(window.getSize().y) / backgroundImageForGame.getSize().y
-        );
     }
 
     void userInput(Event& event){
@@ -633,7 +676,7 @@ public:
                 } else {
                     playerInput += static_cast<char>(event.text.unicode);
                 }
-                updateNameDisplay(playerInput);
+                renderer.updateNameDisplay(playerInput);
             }
         } else if (event.type == Event::KeyReleased) {
             keyHandled = false;
@@ -641,36 +684,30 @@ public:
     }
 
     void startGame(){
-        RenderWindow window(VideoMode(1000, 805), "Tetris game from Yarrochka");
-        downloadTextures(window);
+        renderer.downloadTextures();
         dataStorage.loadPlayersData();
 
-        while (window.isOpen()) {
+        while (renderer.window.isOpen()) {
             Event event;
-            while (window.pollEvent(event)) {
+            while (renderer.window.pollEvent(event)) {
                 if (event.type == Event::Closed) {
-                    window.close();
+                    renderer.window.close();
                 }
             }
 
-            window.clear();
+            renderer.window.clear();
 
             if (isMenu) {
                 userInput(event);
                 Player player(playerInput);
-                Button playButton(playImage, 100, 100);
-                Button exitButton(exitImage, 122, 250);
-                window.draw(backgroundSprite);
-                playButton.draw(window);
-                exitButton.draw(window);
-                window.draw(nameText);
+                renderer.drawMenu();
 
-                if (playButton.isClicked(window)) {
+                if (renderer.getPLayButton()->isClicked(renderer.window)) {
                     if (!playerInput.empty()) {
                         Player* existingPlayer = dataStorage.getPlayerByName(playerInput);
                         if (existingPlayer) {
                             currentPlayer = existingPlayer;
-                            updateBestScoreDisplay(existingPlayer->getBestScore());
+                            renderer.updateBestScoreDisplay(existingPlayer->getBestScore());
                         }
                         else{
                             currentPlayer = new Player(playerInput);
@@ -678,20 +715,21 @@ public:
                     }
                     isMenu = false;
                 }
-                if (exitButton.isClicked(window)) {
-                    window.close();
+                if (renderer.getExitButton()->isClicked(renderer.window)) {
+                    renderer.window.close();
                 }
             } else {
-                tetrisRun(event, window);
+                tetrisRun(event, renderer.window);
             }
 
-            window.display();
+            renderer.window.display();
         }
     };
 };
 
 int main() {
-    GameMenu gameMenu;
+    RenderWindow window(VideoMode(1000, 805), "Tetris game from Yarrochka");
+    GameMenu gameMenu(window);
     gameMenu.startGame();
 
     return 0;
