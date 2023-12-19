@@ -595,7 +595,6 @@ public:
     }
 };
 
-
 class GameMenu {
 private:
     bool gameOver, keyHandled, isMenu;
@@ -646,7 +645,7 @@ public:
                 renderer.draw();
                 window.display();
 
-                this_thread::sleep_for(chrono::milliseconds(450));
+                this_thread::sleep_for(chrono::milliseconds(350));
 
                 if (!gameMap.canPlaceBlock(7, 0, currentBlock.shape)) {
                     gameOver = true;
@@ -685,7 +684,6 @@ public:
 
     void startGame(){
         renderer.downloadTextures();
-        dataStorage.loadPlayersData();
 
         while (renderer.window.isOpen()) {
             Event event;
