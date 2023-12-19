@@ -399,26 +399,82 @@ private:
 
 public:
     Player(string name) : name(name), currentScore(0), bestScore(0) {}
+
+    void setCurrentScore(int score) {
+        this->currentScore = score;
+        if (this->currentScore > this->bestScore) {
+            this->bestScore = this->currentScore;
+        }
+    }
+
+    int getBestScore() const {
+        return this->bestScore;
+    }
+
+    string getName() const {
+        return this->name;
+    }
+
+    string getAllData() const {
+        return this->name + ", " + to_string(this->bestScore) + "\n";
+    }
 };
 
 class GameDataStorage {
 private:
     vector<Player*> players;
+    const string fileName = "playersDataStorage.txt";
 
 public:
-    void savePlayerData(Player& player);
-    vector<Player*> loadPlayersData();
-};
+    void savePlayerData(Player* player) {
+        bool playerExists = false;
+        for (auto* p : players) {
+            if (p->getName() == player->getName()) {
+                p->setCurrentScore(player->getBestScore());
+                playerExists = true;
+                break;
+            }
+        }
 
-class GameStateManager {
-private:
-    string currentState;
+        if (!playerExists) {
+            players.push_back(player);
+        }
 
-public:
-    void changeState(string newState);
-    string getState();
-    void pauseGame();
-    void resumeGame();
+        ofstream file(fileName, ios::trunc);
+        if (file.is_open()) {
+            for (const auto* p : players) {
+                file << p->getAllData();
+            }
+            file.close();
+        }
+    }
+
+    vector<Player*> loadPlayersData() {
+        ifstream file(fileName);
+        string line;
+        while (getline(file, line)) {
+            size_t commaPos = line.find(',');
+            string name = line.substr(0, commaPos);
+            string scoreStr = line.substr(commaPos + 1);
+            scoreStr.erase(0, scoreStr.find_first_not_of(" \t"));
+            scoreStr.erase(scoreStr.find_last_not_of(" \t") + 1);
+            int score = stoi(scoreStr);
+
+            Player* player = new Player(name);
+            player->setCurrentScore(score);
+            players.push_back(player);
+        }
+        return players;
+    }
+
+    Player* getPlayerByName(const string& name) {
+        for (auto* player : players) {
+            if (player->getName() == name) {
+                return player;
+            }
+        }
+        return nullptr;
+    }
 };
 
 class Button {
@@ -449,27 +505,35 @@ private:
     Block::Type types[7] = {Block::Type::O, Block::Type::I, Block::Type::S, Block::Type::Z,
                             Block::Type::L, Block::Type::J, Block::Type::T};
     Font font;
-    Text scoreText;
+    Text scoreText, nameText, bestScoreText;
     Texture backgroundImage, playImage, exitImage, backgroundImageForGame;
     Sprite backgroundSprite, backgroundImageForGameSprite;
-    Text nameText;
     string playerInput;
+    GameDataStorage dataStorage;
+    Player* currentPlayer;
 
 public:
-    GameMenu(): gameOver(false), isMenu(true), keyHandled(false){
+    GameMenu(): gameOver(false), isMenu(true), keyHandled(false), currentPlayer(nullptr){
         font.loadFromFile("/Users/Yarrochka/Downloads/VCR_OSD_MONO.ttf");
         scoreText.setFont(font);
         scoreText.setCharacterSize(25);
         scoreText.setFillColor(Color::Black);
         scoreText.setStyle(Text::Bold);
         scoreText.setPosition(60, 60);
-        scoreText.setString("Score: ");
+        scoreText.setString("Score:\n\n 0");
 
         nameText.setFont(font);
         nameText.setCharacterSize(24);
         nameText.setFillColor(Color::White);
         nameText.setString("Name: ");
         nameText.setPosition(120, 60);
+
+        bestScoreText.setFont(font);
+        bestScoreText.setCharacterSize(25);
+        bestScoreText.setFillColor(Color::Black);
+        bestScoreText.setStyle(Text::Bold);
+        bestScoreText.setPosition(760, 60);
+        bestScoreText.setString("Best Score:\n\n -");
     };
 
     Block generateRandomBlock() {
@@ -478,16 +542,19 @@ public:
     }
 
     void updateScoreDisplay(int score) {
-        scoreText.setString("Score: " + to_string(score));
+        scoreText.setString("Score:\n\n " + to_string(score));
     }
 
     void updateNameDisplay(string& name) {
         nameText.setString("Name: " + name);
     }
 
-    void tetrisRun(Event& event, RenderWindow& window){
-        Map gameMap(420, 805);
+    void updateBestScoreDisplay(int bestScore) {
+        bestScoreText.setString("Best Score:\n\n" + to_string(bestScore));
+    }
 
+    void tetrisRun(Event& event, RenderWindow& window) {
+        Map gameMap(420, 805);
         while (!gameOver && window.isOpen()) {
             Block currentBlock = generateRandomBlock();
             Vector2i blockPosition(4, 0);
@@ -504,7 +571,8 @@ public:
                 if (gameMap.canPlaceBlock(blockPosition.x, blockPosition.y + 1, currentBlock.shape)) {
                     blockPosition.y++;
                 } else {
-                    gameMap.dropBlock(blockPosition.x, blockPosition.y, static_cast<int>(currentBlock.type), currentBlock.shape);
+                    gameMap.dropBlock(blockPosition.x, blockPosition.y, static_cast<int>(currentBlock.type),
+                                      currentBlock.shape);
                     blockPlaced = true;
                 }
 
@@ -513,6 +581,7 @@ public:
                 gameMap.draw(window);
                 currentBlock.draw(window, gameMap, blockPosition.x, blockPosition.y);
                 window.draw(scoreText);
+                window.draw(bestScoreText);
                 window.display();
 
                 this_thread::sleep_for(chrono::milliseconds(450));
@@ -524,6 +593,11 @@ public:
 
             gameMap.removeLine();
             updateScoreDisplay(gameMap.removedLines * 100);
+        }
+        if (currentPlayer->getBestScore() < gameMap.removedLines * 100)
+        {
+            currentPlayer->setCurrentScore(gameMap.removedLines * 100);
+            dataStorage.savePlayerData(currentPlayer);
         }
     }
 
@@ -569,6 +643,8 @@ public:
     void startGame(){
         RenderWindow window(VideoMode(1000, 805), "Tetris game from Yarrochka");
         downloadTextures(window);
+        dataStorage.loadPlayersData();
+
         while (window.isOpen()) {
             Event event;
             while (window.pollEvent(event)) {
@@ -590,6 +666,16 @@ public:
                 window.draw(nameText);
 
                 if (playButton.isClicked(window)) {
+                    if (!playerInput.empty()) {
+                        Player* existingPlayer = dataStorage.getPlayerByName(playerInput);
+                        if (existingPlayer) {
+                            currentPlayer = existingPlayer;
+                            updateBestScoreDisplay(existingPlayer->getBestScore());
+                        }
+                        else{
+                            currentPlayer = new Player(playerInput);
+                        }
+                    }
                     isMenu = false;
                 }
                 if (exitButton.isClicked(window)) {
