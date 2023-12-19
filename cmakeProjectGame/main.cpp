@@ -5,11 +5,13 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <fstream>
+#include <sstream>
 
 using namespace sf;
 using namespace std;
 
-int blockShapes[7][4][4][4] = {
+constexpr int blockShapes[7][4][4][4] = {
         // Type: O
         {
                 {
@@ -207,7 +209,9 @@ int blockShapes[7][4][4][4] = {
         }
 };
 
-class Block;
+constexpr int DEFAULT_ROWS_COUNT = 23;
+constexpr int DEFAULT_COLUMNS_COUNT = 12;
+constexpr int DEFAULT_CELL_SIZE = 35;
 
 class Map {
 private:
@@ -215,10 +219,6 @@ private:
     int height;
     RectangleShape field;
     vector<vector<int>> grid;
-    const int DEFAULT_ROWS_COUNT = 23;
-    const int DEFAULT_COLUMNS_COUNT = 12;
-    const int DEFAULT_CELL_SIZE = 35;
-    friend class Block;
 
 public:
     int removedLines;
@@ -227,8 +227,6 @@ public:
         field.setSize(Vector2f(width, height));
         field.setFillColor(Color::Black);
         field.setPosition((1000 - width) / 2.0f,0);
-
-        // emptyCellNumber = -1;
         grid.resize(DEFAULT_ROWS_COUNT, vector<int>(DEFAULT_COLUMNS_COUNT, -1));
     }
 
@@ -277,7 +275,15 @@ public:
         return true;
     }
 
-    void dropBlock(int x, int y, Block& block);
+    void dropBlock(int x, int y, int blockType, int shape[4][4]) {
+        for (int i = 0; i < 4; i++) {
+            for (int j = 0; j < 4; j++) {
+                if (shape[i][j] != 0) {
+                    grid[y + i][x + j] = blockType;
+                }
+            }
+        }
+    }
 
     void removeLine(){
         for (int y = DEFAULT_ROWS_COUNT - 1; y >= 0; --y) {
@@ -304,6 +310,10 @@ public:
         }
     };
 
+    int getFieldX(){
+        return this->field.getPosition().x;
+    }
+
     void changeSize();
 };
 
@@ -312,13 +322,15 @@ public:
     enum class Type { O, I, S, Z, L, J, T };
 
 private:
-    Type type;
-    int shape[4][4];
     int rotationState;
     friend class GameMenu;
-    friend class Map;
+
+protected:
+    Type type;
+    int shape[4][4];
 
 public:
+
     Block(Type& type) : type(type), rotationState(0) {
         // copying a block of memory from one location to another
         // destination (where to copy), source (where to copy from) and size of the memory block to be copied
@@ -334,9 +346,9 @@ public:
         for (int i = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
                 if (shape[i][j] != 0) {
-                    RectangleShape cell(Vector2f(map.DEFAULT_CELL_SIZE, map.DEFAULT_CELL_SIZE));
-                    cell.setPosition(map.field.getPosition().x + (x + j) * map.DEFAULT_CELL_SIZE,
-                                     map.field.getPosition().y + (y + i) * map.DEFAULT_CELL_SIZE);
+                    RectangleShape cell(Vector2f(DEFAULT_CELL_SIZE, DEFAULT_CELL_SIZE));
+                    cell.setPosition(map.getFieldX() + (x + j) * DEFAULT_CELL_SIZE,
+                                     0 + (y + i) * DEFAULT_CELL_SIZE);
                     cell.setFillColor(map.getColorForType(static_cast<int>(type)));
                     window.draw(cell);
                 }
@@ -377,18 +389,7 @@ public:
             }
         }
     }
-
 };
-
-void Map::dropBlock(int x, int y, Block& block) {
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            if (block.shape[i][j] != 0) {
-                grid[y + i][x + j] = static_cast<int>(block.type);
-            }
-        }
-    }
-}
 
 class Player {
 private:
@@ -397,23 +398,7 @@ private:
     int bestScore;
 
 public:
-    Player(string& name) : name(name), currentScore(0), bestScore(0){}
-
-    void saveData(){
-
-    }
-
-    void checkAndUpdateScore(int score) {
-        this->currentScore = score;
-        if (score > this->bestScore) {
-            this->bestScore = score;
-            // saveData();
-        }
-    }
-
-    int getBestScore() {
-        return this->bestScore;
-    }
+    Player(string name) : name(name), currentScore(0), bestScore(0) {}
 };
 
 class GameDataStorage {
@@ -421,8 +406,8 @@ private:
     vector<Player*> players;
 
 public:
-    void savePlayerData(Player player);
-    Player* loadPlayerData();
+    void savePlayerData(Player& player);
+    vector<Player*> loadPlayersData();
 };
 
 class GameStateManager {
@@ -519,7 +504,7 @@ public:
                 if (gameMap.canPlaceBlock(blockPosition.x, blockPosition.y + 1, currentBlock.shape)) {
                     blockPosition.y++;
                 } else {
-                    gameMap.dropBlock(blockPosition.x, blockPosition.y, currentBlock);
+                    gameMap.dropBlock(blockPosition.x, blockPosition.y, static_cast<int>(currentBlock.type), currentBlock.shape);
                     blockPlaced = true;
                 }
 
